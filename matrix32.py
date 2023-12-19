@@ -2,9 +2,6 @@ import numpy as np
 
 
 class MatrixGenerator:
-    def __init__(self):
-        np.random.seed(43)
-
     def combine_vectors_to_matrix(self, vector1, vector2):
         """
         Combine two input vectors into a 32x32 matrix.
@@ -69,6 +66,7 @@ class MatrixGenerator:
 
 # Example usage:
 matrix_generator = MatrixGenerator()
+np.random.seed(43)
 vector_list = [np.round(10 * np.random.rand(512)) for _ in range(10)]
 
 # Generate matrices based on the given vector list
