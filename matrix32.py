@@ -63,16 +63,3 @@ class MatrixGenerator:
             matrices.append(result_matrix)
 
         return matrices
-
-
-# Example usage:
-matrix_generator = MatrixGenerator()
-np.random.seed(43)
-vector_list = [np.round(10 * np.random.rand(512)) for _ in range(10)]
-
-# Generate matrices based on the given vector list
-result_matrices = matrix_generator.generate_matrices(vector_list)
-
-# Print or use the generated matrices as needed
-for i, matrix in enumerate(result_matrices, 1):
-    print(f"Matrix {i}:\n{matrix}\n")
