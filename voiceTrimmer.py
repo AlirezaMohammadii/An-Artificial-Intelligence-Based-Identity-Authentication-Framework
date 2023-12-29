@@ -1,3 +1,4 @@
+# git push -f origin main
 import os
 import shutil
 import random
@@ -202,7 +203,7 @@ def main(parent_directory):
     move_files_to_destinations(all_files, parent_directory)
 
     # Additional functions
-    delete_short_audio_files(parent_directory, duration_threshold=7)
+    delete_short_audio_files(parent_directory, duration_threshold=10)
     keep_random_files(parent_directory, seed=43)
     # delete_matrices(parent_directory)
     delete_files_except_flac(parent_directory)
@@ -211,7 +212,9 @@ def main(parent_directory):
 
 if __name__ == "__main__":
     # Example Usage:
-    parent_dir = "F:/1.Deakin university/Python/13_10_2023_My_Project_1/Deep-VR/LibriSpeech/train-clean-100"
+    parent_dir = (
+        "F:/1.Deakin university/Python/13_10_2023_My_Project_1/Deep-VR/train-clean-100"
+    )
 
     import time
 

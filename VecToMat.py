@@ -1,3 +1,4 @@
+# git push -f origin main
 import os
 import numpy as np
 import random
@@ -77,55 +78,56 @@ def process_audio_files(args):
         np.save(matrix_filename, matrix)
 
     # # Print or use the matrices as needed
-    # print(f"vector 1:\n{reshaped_feature_vectors[0][0:2]}\n")
-    # print(f"vector 2:\n{reshaped_feature_vectors[9][0:2]}\n")
-    # print(f"Matrix 1:\n{matrices[0][0:4]}\n")
+    print(f"vector 1:\n{reshaped_feature_vectors[9][0:2]}\n")
+    print(f"vector 2:\n{reshaped_feature_vectors[0][0:2]}\n")
+    print(f"Matrix 1:\n{matrices[9][0:4]}\n")
     return matrices
 
 
 def main():
     # Reproducible results.
-    with cProfile.Profile() as pr:
-        np.random.seed(123)
-        random.seed(123)
+    # with cProfile.Profile() as pr:
+    np.random.seed(123)
+    random.seed(123)
 
-        # Define the model here.
-        model = DeepSpeakerModel()
+    # Define the model here.
+    model = DeepSpeakerModel()
 
-        # Load the checkpoint.
-        model.m.load_weights(
-            "F:/1.Deakin university/Python/13_10_2023_My_Project_1/Deep-VR/deep-speaker/ResCNN_triplet_training_checkpoint_265.h5",
-            by_name=True,
+    # Load the checkpoint.
+    model.m.load_weights(
+        "F:/1.Deakin university/Python/13_10_2023_My_Project_1/Deep-VR/deep-speaker/ResCNN_triplet_training_checkpoint_265.h5",
+        by_name=True,
+    )
+
+    # Specify the parent directory containing subdirectories with audio files
+    parent_directory = (
+        "F:/1.Deakin university/Python/13_10_2023_My_Project_1/Deep-VR/train-clean-100#"
+    )
+
+    # Use thread pool to parallelize the processing of subdirectories
+    all_matrices = []
+    with ThreadPoolExecutor() as executor:
+        all_matrices = list(
+            executor.map(
+                process_audio_files,
+                [
+                    (os.path.join(parent_directory, subdirectory), model)
+                    for subdirectory in os.listdir(parent_directory)
+                    if os.path.isdir(os.path.join(parent_directory, subdirectory))
+                ],
+            )
         )
 
-        # Specify the parent directory containing subdirectories with audio files
-        parent_directory = "F:/1.Deakin university/Python/13_10_2023_My_Project_1/Deep-VR/deep-speaker/samples/LibriSpeech/dev-clean"
-
-        # Use thread pool to parallelize the processing of subdirectories
-        all_matrices = []
-        with ThreadPoolExecutor() as executor:
-            all_matrices = list(
-                executor.map(
-                    process_audio_files,
-                    [
-                        (os.path.join(parent_directory, subdirectory), model)
-                        for subdirectory in os.listdir(parent_directory)
-                        if os.path.isdir(os.path.join(parent_directory, subdirectory))
-                    ],
-                )
-            )
-
-        # Concatenate matrices to match the original shape (400, 32, 32)
-        all_matrices = np.concatenate(all_matrices, axis=0)
-        # Save the list of all matrices in a single file
-        all_matrices_filename = os.path.join(parent_directory, "all_matrices.npy")
-        np.save(all_matrices_filename, all_matrices)
+    # Concatenate matrices to match the original shape (400, 32, 32)
+    all_matrices = np.concatenate(all_matrices, axis=0)
+    # Save the list of all matrices in a single file
+    all_matrices_filename = os.path.join(parent_directory, "all_matrices.npy")
+    np.save(all_matrices_filename, all_matrices)
     # Print profiling results
-    pr.print_stats(sort="cumulative")
+    # pr.print_stats(sort="cumulative")
 
 
 if __name__ == "__main__":
-    main()
     import time
 
     start_time = time.time()
@@ -133,4 +135,6 @@ if __name__ == "__main__":
     end_time = time.time()
 
     # Print execution time
-    print(f"Execution time: {end_time - start_time} seconds")
+    print(
+        f"Execution time: {end_time - start_time} seconds"
+    )  # Execution time: 84.71616816520691 seconds
