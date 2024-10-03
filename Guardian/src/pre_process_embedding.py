@@ -9,7 +9,7 @@
 ##   Choose preprocess_embadding_and_save_x
 ##
 ##
-
+import time as tm
 import os
 import gc
 import random
@@ -19,12 +19,11 @@ import pandas as pd
 from multiprocessing import Pool
 from time import time
 import sys
-import time as tm
 
 sys.path.append("..")
 
 import guardian.constants as c
-from guardian.utils import (
+from guardian.utils_my_version import (
     get_last_checkpoint_if_any,
     find_files,
     clipped_audio,
@@ -32,7 +31,7 @@ from guardian.utils import (
 )
 
 #### loading deep speaker model
-from authentication_model.deep_speaker_models import convolutional_model
+from authentication_model.deep_speaker_model_modified import convolutional_model
 
 np.set_printoptions(threshold=sys.maxsize)
 # np.set_printoptions(threshold=np.nan)
@@ -41,14 +40,6 @@ pd.set_option("display.max_rows", 500)
 pd.set_option("display.max_columns", 500)
 pd.set_option("display.width", 1000)
 pd.set_option("max_colwidth", 100)
-
-
-def ensure_subdirectories_exist(wav_dir):
-    embedding_dir = os.path.join(wav_dir, "embedding")
-
-    if not os.path.exists(embedding_dir):
-        os.makedirs(embedding_dir)
-        print(f"Created directory: {embedding_dir}")
 
 
 def create_test_data(test_dir, file_name):
@@ -486,6 +477,84 @@ def unbalanced_preprocess_embadding_and_save_2_different_users(
     print("*^ˍ^*  *^ˍ^*  *^ˍ^*  *^ˍ^*  *^ˍ^*  *^ˍ^*  *^ˍ^*  *^ˍ^*  *^ˍ^*  *^ˍ^*  *^ˍ^*")
 
 
+def preprocess_embadding_and_save_2_same_users(npy_dir, out_dir, GPU_or_not):
+    user_ID, last_checkpoint_number, orig_time = preprocess_embadding_and_save_p2(
+        npy_dir, out_dir, GPU_or_not
+    )
+    # print(user_ID)
+    ## random
+
+    for i in range(len(user_ID)):
+        same_user_ID_file_list = find_files(out_dir, pattern=user_ID[i] + "-*")
+        # print(same_user_ID_file_list)
+        for j in range(len(same_user_ID_file_list)):
+            # print(same_user_ID_file_list[j])
+            same_user_name = user_ID[i].split("-")[0]  # 19
+            same_user_file_list = find_files(
+                out_dir, pattern=same_user_name + "-*"
+            )  # ['/home/cc/data/14-208-0005.npy','...']
+            tmp_same_user_file_list = same_user_file_list[:]
+            for index in range(len(same_user_file_list)):
+
+                if "(" in same_user_file_list[index].split("/")[-1]:
+                    # Vox Dataset detection
+                    # filename contain "id" id00015(id02213)-id02213FEovfendX3k-00003.npy
+                    # same_user_file_list[index] /home/.../embeddi...sers/id00015(id02213)-id02213FEovfendX3k-00003.npy
+                    if "id" in same_user_file_list[index].split("/")[-1].split("-")[0]:
+                        # Vox Dataset
+                        # user_ID[i] ==> id00015(id02213)-id02213FEovfendX3k
+                        # expect id00015(id02213)-id02213
+                        user_ID_split = user_ID[i].split("-")
+                        if (
+                            user_ID_split[0] + "-" + user_ID_split[1][0:7]
+                            not in same_user_file_list[index]
+                        ):
+                            # print('expect user ID', user_ID_split[0]+'-'+user_ID_split[1][0:7])
+                            tmp_same_user_file_list.remove(same_user_file_list[index])
+                    else:
+                        # LibriSpeech Dataset
+                        if user_ID[i] + "-" not in same_user_file_list[index]:
+                            tmp_same_user_file_list.remove(same_user_file_list[index])
+            same_user_file_list = tmp_same_user_file_list
+            # print('=====================')
+            # print(user_ID[i])
+            # print(same_user_file_list)
+
+            k_random = random.randint(0, len(same_user_file_list) - 1)
+            singel_embedding1 = np.load(same_user_ID_file_list[j])
+            # print(same_user_ID_file_list[j])
+            singel_embedding2 = np.load(same_user_file_list[k_random])
+            # print(same_user_file_list[k_random])
+            embedding_temp = (singel_embedding1, singel_embedding2)
+            embedding = np.concatenate(embedding_temp).reshape(1, 1024)
+            target_filename = (
+                out_dir
+                + last_checkpoint_number
+                + "-"
+                + same_user_name
+                + "-"
+                + user_ID[i].split("-")[1]
+                + str(j)
+                + ".npy"
+            )
+            # print(target_filename)
+            np.save(target_filename, embedding)
+
+    os.system(
+        "find "
+        + out_dir
+        + " -type f ! -name "
+        + last_checkpoint_number
+        + '"-*-*.npy" -delete'
+    )
+    print(
+        "Extract audio features and save it as npy file, cost {0} seconds".format(
+            time() - orig_time
+        )
+    )
+    print("*^ˍ^*  *^ˍ^*  *^ˍ^*  *^ˍ^*  *^ˍ^*  *^ˍ^*  *^ˍ^*  *^ˍ^*  *^ˍ^*  *^ˍ^*  *^ˍ^*")
+
+
 def preprocess_embadding_and_save_2_different_users_deterministic(
     npy_dir, out_dir, GPU_or_not
 ):
@@ -548,107 +617,13 @@ def preprocess_embadding_and_save_2_different_users_deterministic(
     print("*^ˍ^*  *^ˍ^*  *^ˍ^*  *^ˍ^*  *^ˍ^*  *^ˍ^*  *^ˍ^*  *^ˍ^*  *^ˍ^*  *^ˍ^*  *^ˍ^*")
 
 
-def find_files(directory, pattern):
-    """Find files in the directory matching the given pattern."""
-    import glob
-
-    return glob.glob(os.path.join(directory, pattern))
-
-
-def preprocess_embadding_and_save_p2(npy_dir, out_dir, GPU_or_not):
-    """Placeholder for the actual preprocessing function."""
-    import random
-
-    user_ID = [f"user{i}-000{j}" for i in range(1, 11) for j in range(1, 11)]
-    last_checkpoint_number = "checkpoint_001"
-    orig_time = time()
-    return user_ID, last_checkpoint_number, orig_time
-
-
-def preprocess_embadding_and_save_2_same_users(npy_dir, out_dir, GPU_or_not):
-    user_ID, last_checkpoint_number, orig_time = preprocess_embadding_and_save_p2(
-        npy_dir, out_dir, GPU_or_not
-    )
-    # print(user_ID)
-    ## random
-
-    for i in range(len(user_ID)):
-        same_user_ID_file_list = find_files(out_dir, pattern=user_ID[i] + "-*")
-        # print(same_user_ID_file_list)
-        for j in range(len(same_user_ID_file_list)):
-            # print(same_user_ID_file_list[j])
-            same_user_name = user_ID[i].split("-")[0]  # 19
-            same_user_file_list = find_files(
-                out_dir, pattern=same_user_name + "-*"
-            )  # ['/home/cc/data/14-208-0005.npy','...']
-            tmp_same_user_file_list = same_user_file_list[:]
-            for index in range(len(same_user_file_list)):
-                if "(" in same_user_file_list[index].split("/")[-1]:
-                    # Vox Dataset detection
-                    # filename contain "id" id00015(id02213)-id02213FEovfendX3k-00003.npy
-                    # same_user_file_list[index] /home/.../embeddi...sers/id00015(id02213)-id02213FEovfendX3k-00003.npy
-                    if "id" in same_user_file_list[index].split("/")[-1].split("-")[0]:
-                        # Vox Dataset
-                        # user_ID[i] ==> id00015(id02213)-id02213FEovfendX3k
-                        # expect id00015(id02213)-id02213
-                        user_ID_split = user_ID[i].split("-")
-                        if (
-                            user_ID_split[0] + "-" + user_ID_split[1][0:7]
-                            not in same_user_file_list[index]
-                        ):
-                            # print('expect user ID', user_ID_split[0]+'-'+user_ID_split[1][0:7])
-                            tmp_same_user_file_list.remove(same_user_file_list[index])
-                    else:
-                        # LibriSpeech Dataset
-                        if user_ID[i] + "-" not in same_user_file_list[index]:
-                            tmp_same_user_file_list.remove(same_user_file_list[index])
-            same_user_file_list = tmp_same_user_file_list
-            # print('=====================')
-            # print(user_ID[i])
-            # print(same_user_file_list)
-
-            k_random = random.randint(0, len(same_user_file_list) - 1)
-            singel_embedding1 = np.load(same_user_ID_file_list[j])
-            # print(same_user_ID_file_list[j])
-            singel_embedding2 = np.load(same_user_file_list[k_random])
-            # print(same_user_file_list[k_random])
-            embedding_temp = (singel_embedding1, singel_embedding2)
-            embedding = np.concatenate(embedding_temp).reshape(1, 1024)
-            target_filename = (
-                out_dir
-                + last_checkpoint_number
-                + "-"
-                + same_user_name
-                + "-"
-                + user_ID[i].split("-")[1]
-                + str(j)
-                + ".npy"
-            )
-            # print(target_filename)
-            np.save(target_filename, embedding)
-
-    os.system(
-        "find "
-        + out_dir
-        + " -type f ! -name "
-        + last_checkpoint_number
-        + '"-*-*.npy" -delete'
-    )
-    print(
-        "Extract audio features and save it as npy file, cost {0} seconds".format(
-            time() - orig_time
-        )
-    )
-    print("*^ˍ^*  *^ˍ^*  *^ˍ^*  *^ˍ^*  *^ˍ^*  *^ˍ^*  *^ˍ^*  *^ˍ^*  *^ˍ^*  *^ˍ^*  *^ˍ^*")
-
-
 if __name__ == "__main__":
     start_time_main = tm.time()
     # ensure_subdirectories_exist("../data/sample_dataset/5Attack/")
     ###################################################### change detail here ################################################
 
-    npy_dir = "../data/sample_dataset/npy_test/"
-    out_dir = "../data/sample_dataset/npy_test/embedd/"
+    npy_dir = "../data/sample_dataset/npy_test_1/"
+    out_dir = "../data/sample_dataset/npy_test_1/embedding/"
 
     # embedding_type 1, 2_same, 2_different, 2_random, deterministic
     embedding_type = "2_different"
@@ -679,6 +654,7 @@ if __name__ == "__main__":
         print("unbalanced")
         unbalanced_preprocess_embadding_and_save_2_different_users(
             npy_dir, out_dir, GPU_or_not, loop_num=0
+        )
     elif embedding_type == "deterministic":
         print("Deterministic")
         preprocess_embadding_and_save_2_different_users_deterministic(
