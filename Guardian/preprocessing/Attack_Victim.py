@@ -352,6 +352,32 @@ def edit_filenames_in_subdirectories(directory_path):
                 os.rename(original_path, new_path)
                 print(f"Renamed: {file_name} to {new_name}")
 
+def rename_audio_files(directory_path):
+    # Iterate through each subdirectory in the parent directory
+    for subdir, _, files in os.walk(directory_path):
+        # Filter out only .wav files
+        wav_files = [f for f in files if f.endswith('.wav')]
+        
+        if not wav_files:
+            continue  # Skip if no wav files
+
+        # Generate a unique 'zzzz-xxxx' for each subdirectory using np.random
+        unique_prefix = f"{np.random.randint(1000, 9999)}-{np.random.randint(1000, 9999)}"
+        
+        for i, filename in enumerate(wav_files, 1):
+            # Extract the file extension
+            file_ext = os.path.splitext(filename)[1]
+            
+            # Generate the new file name using the pattern 'zzzz-xxxx-yyyy'
+            new_filename = f"{unique_prefix}-{i:04d}{file_ext}"
+            
+            # Get the full current path and the full new path
+            current_path = os.path.join(subdir, filename)
+            new_path = os.path.join(subdir, new_filename)
+            
+            # Rename the file
+            os.rename(current_path, new_path)
+            print(f"Renamed: {current_path} -> {new_path}")
 
 if __name__ == "__main__":
     # Example Usage:
