@@ -2,13 +2,16 @@ import os
 import random
 import shutil
 import json
+from itertools import cycle
+from random import sample
 
 
 def Attacker_generator(directory_path: str, percentage: int) -> None:
     """
     Selects a random subsection of subdirectories within the given directory path,
     renames them to 'attacker_i' where i is an incremental index, and moves them
-    to the 'Attackers' subdirectory one level up.
+    to the 'Attackers' subdirectory one level up. Additionally, it outputs a mapping
+    between the original names of the folders and their new names.
 
     Args:
     - directory_path (str): The path of the directory containing subdirectories.
@@ -43,17 +46,95 @@ def Attacker_generator(directory_path: str, percentage: int) -> None:
         # Step 4: Randomly select subdirectories
         selected_subdirectories = random.sample(subdirectories, num_to_select)
 
-        # Step 5: Rename and move selected subdirectories to 'Attackers'
+        # Step 5: Initialize mapping dictionary
+        mapping = {}
+
+        # Step 6: Rename and move selected subdirectories to 'Attackers'
         for index, subdirectory in enumerate(selected_subdirectories, start=1):
             new_name = f"attacker_{index}"
             old_path = os.path.join(directory_path, subdirectory)
             new_path = os.path.join(attackers_directory, new_name)
+
+            # Update mapping
+            mapping[subdirectory] = new_name
 
             os.rename(old_path, new_path)
 
         print(
             f"Successfully selected and renamed {num_to_select} subdirectories to 'Attackers'."
         )
+
+        # Step 7: Save the mapping as a dictionary in a JSON format file
+        mapping_file_path = os.path.join(attackers_directory, "attackers.json")
+        with open(mapping_file_path, "w") as mapping_file:
+            json.dump(mapping, mapping_file, indent=2)
+
+    except Exception as e:
+        print(f"Error: {e}")
+
+
+def new_user_generator(directory_path: str, percentage: int) -> None:
+    """
+    Selects a random subsection of subdirectories within the given directory path,
+    renames them to 'new_user_i' where i is an incremental index, and moves them
+    to the 'new_user' subdirectory one level up. Additionally, it outputs a mapping
+    between the original names of the folders and their new names.
+
+    Args:
+    - directory_path (str): The path of the directory containing subdirectories.
+    - percentage (int): The percentage of subdirectories to be selected.
+
+    Returns:
+    - None
+    """
+    try:
+        # Step 0: Check if 'new_user' subdirectory already exists
+        new_user_directory = os.path.join(directory_path, "..", "new_user")
+        if os.path.exists(new_user_directory) and os.path.isdir(new_user_directory):
+            print("The 'new_user' subdirectory already exists. Exiting the function.")
+            return
+
+        # Step 1: Validate and get the list of subdirectories
+        if not os.path.isdir(directory_path):
+            raise ValueError("Invalid directory path.")
+
+        subdirectories = [
+            d
+            for d in os.listdir(directory_path)
+            if os.path.isdir(os.path.join(directory_path, d))
+        ]
+
+        # Step 2: Create 'new_user' subdirectory if it doesn't exist
+        os.makedirs(new_user_directory, exist_ok=True)
+
+        # Step 3: Calculate the number of subdirectories to select
+        num_to_select = int(len(subdirectories) * (percentage / 100.0))
+
+        # Step 4: Randomly select subdirectories
+        selected_subdirectories = random.sample(subdirectories, num_to_select)
+
+        # Step 5: Initialize mapping dictionary
+        mapping = {}
+
+        # Step 6: Rename and move selected subdirectories to 'new_user'
+        for index, subdirectory in enumerate(selected_subdirectories, start=1):
+            new_name = f"new_user_{index}"
+            old_path = os.path.join(directory_path, subdirectory)
+            new_path = os.path.join(new_user_directory, new_name)
+
+            # Update mapping
+            mapping[subdirectory] = new_name
+
+            os.rename(old_path, new_path)
+
+        print(
+            f"\n Successfully selected and renamed {num_to_select} subdirectories to 'new_user'."
+        )
+
+        # Step 7: Save the mapping as a dictionary in a JSON format file
+        mapping_file_path = os.path.join(new_user_directory, "new_user.json")
+        with open(mapping_file_path, "w") as mapping_file:
+            json.dump(mapping, mapping_file, indent=2)
 
     except Exception as e:
         print(f"Error: {e}")
@@ -110,7 +191,7 @@ def rename_victim_subdirectories(directory_path: str, selected_percentage: int) 
         )
 
         # Step 7: Save the mapping as a dictionary in a JSON format file
-        mapping_file_path = os.path.join(directory_path, "mapping.json")
+        mapping_file_path = os.path.join(directory_path, "victims.json")
         with open(mapping_file_path, "w") as mapping_file:
             json.dump(mapping, mapping_file, indent=2)
 
@@ -118,19 +199,28 @@ def rename_victim_subdirectories(directory_path: str, selected_percentage: int) 
         print(f"Error: {e}")
 
 
-def replace_audio_victim(attacker_directory: str, victim_directory: str) -> None:
+def replace_audio_victim(
+    attacker_directory: str,
+    victim_directory: str,
+    number_of_replacements: int = 5,
+    mode: str = "sequential",
+) -> None:
     """
-    Replace audio files in victim subdirectories with a selection from attacker subdirectories.
+    Replace audio files in victim subdirectories with a selection from attacker subdirectories based on a specified number
+    of replacements and a mode (sequential or random).
+    Outputs a mapping in a format which shows which "attacker_{i}" replaced the "victim_{x}".
 
     Args:
     - attacker_directory (str): Path to the directory containing attacker subdirectories.
     - victim_directory (str): Path to the directory containing victim subdirectories.
+    - number_of_replacements (int): Number of files to replace, must be in the range 1 to 10.
+    - mode (str): Replacement mode, "sequential" or "random" for the selection of files.
 
     Returns:
     - None
     """
+
     try:
-        # Step 1: Check if the directories exist
         if (
             not os.path.exists(attacker_directory)
             or not os.path.isdir(attacker_directory)
@@ -139,7 +229,9 @@ def replace_audio_victim(attacker_directory: str, victim_directory: str) -> None
         ):
             raise ValueError("One or both specified directories do not exist.")
 
-        # Step 2: Get the list of attacker and victim subdirectories
+        if not 1 <= number_of_replacements < 10:
+            raise ValueError("Number of replacements must be in the range 1 to 10.")
+
         attacker_subdirectories = [
             subdir
             for subdir in os.listdir(attacker_directory)
@@ -153,26 +245,30 @@ def replace_audio_victim(attacker_directory: str, victim_directory: str) -> None
             and subdir.startswith("victim_")
         ]
 
-        # Step 3: Check if there are any attacker or victim subdirectories
-        if not attacker_subdirectories:
-            print("Error: No attacker subdirectories found.")
-            return
-        if not victim_subdirectories:
-            print("Error: No victim subdirectories found.")
-            return
+        if not attacker_subdirectories or not victim_subdirectories:
+            raise ValueError("Error: No attacker or victim subdirectories found.")
 
-        # Step 4: Iterate through attacker and victim subdirectories
-        for attacker_subdir, victim_subdir in zip(
-            attacker_subdirectories, victim_subdirectories
-        ):
-            # Step 5: Get the full paths for the attacker and victim subdirectories
+        attacker_cycle = cycle(attacker_subdirectories)
+        replacement_mapping = {}  # Initialize mapping dictionary
+
+        for victim_subdir in victim_subdirectories:
+            attacker_subdir = next(attacker_cycle)
+            replacement_mapping[victim_subdir] = attacker_subdir  # Update mapping
+
+            # Paths for attacker and victim
             path_attacker = os.path.join(attacker_directory, attacker_subdir)
             path_victim = os.path.join(victim_directory, victim_subdir)
 
-            # Step 6: Get the list of files in the attacker subdirectory
-            files_to_copy = os.listdir(path_attacker)[:5]
+            if mode == "random":
+                files_in_attacker_dir = os.listdir(path_attacker)
+                files_to_copy = sample(files_in_attacker_dir, k=number_of_replacements)
 
-            # Step 7: Copy 5 files from the attacker subdirectory to a temporary folder
+                files_in_victim_dir = os.listdir(path_victim)
+                files_to_delete = sample(files_in_victim_dir, k=number_of_replacements)
+            else:  # mode == "sequential"
+                files_to_copy = os.listdir(path_attacker)[:number_of_replacements]
+                files_to_delete = os.listdir(path_victim)[:number_of_replacements]
+
             temp_folder = os.path.join(attacker_directory, "temp_folder")
             os.makedirs(temp_folder, exist_ok=True)
 
@@ -181,34 +277,46 @@ def replace_audio_victim(attacker_directory: str, victim_directory: str) -> None
                 destination_path = os.path.join(temp_folder, file_name)
                 shutil.copy(source_path, destination_path)
 
-            # Step 8: Delete 5 files from the victim subdirectory
-            files_to_delete = os.listdir(path_victim)[:5]
             for file_name in files_to_delete:
                 file_path = os.path.join(path_victim, file_name)
                 os.remove(file_path)
 
-            # Step 9: Move 5 copied files from the temporary folder to the victim subdirectory
             for file_name in files_to_copy:
                 source_path = os.path.join(temp_folder, file_name)
                 destination_path = os.path.join(path_victim, file_name)
                 shutil.move(source_path, destination_path)
 
-            # Step 10: Remove the temporary folder
             shutil.rmtree(temp_folder)
 
-        # Step 11: Check if there are more attacker subdirectories than victim subdirectories
-        if len(attacker_subdirectories) > len(victim_subdirectories):
-            remaining_attackers = attacker_subdirectories[len(victim_subdirectories) :]
-            print(
-                f"\nWarning: There are more attacker subdirectories ({len(remaining_attackers)}) than victim subdirectories. "
-                f"Remaining attacker subdirectories: {', '.join(remaining_attackers)}"
-            )
+        # After processing all replacements, save the mapping to a JSON file
+        mapping_file_path = os.path.join(victim_directory, "replacements.json")
+        with open(mapping_file_path, "w") as file:
+            json.dump(replacement_mapping, file, indent=4)
+
+        print(f"Replacement mapping saved to {mapping_file_path}")
+        print(
+            f"\n Utterances got replaced in each victim's account: {number_of_replacements} - mode: {mode}"
+        )
 
     except Exception as e:
         print(f"Error: {e}")
 
 
+# Commented out function call for safety
+# replace_audio_victim("/path/to/attacker_directory", "/path/to/victim_directory", 5, "random")
+
+
 def edit_filenames_in_subdirectories(directory_path):
+    # Path to the victims.json file
+    victims_json_path = os.path.join(directory_path, "victims.json")
+
+    # Load the mapping from the JSON file
+    with open(victims_json_path, "r") as file:
+        victim_mapping = json.load(file)
+
+    # Reverse the mapping to get folder names as keys and numbers as values
+    folder_to_key_mapping = {v: k for k, v in victim_mapping.items()}
+
     # List all subdirectories with names "victim_{i}"
     subdirectories = [
         d
@@ -219,31 +327,30 @@ def edit_filenames_in_subdirectories(directory_path):
     for subdirectory in subdirectories:
         subdir_path = os.path.join(directory_path, subdirectory)
 
-        # Get all file names in the subdirectory
-        file_names = [
-            f
-            for f in os.listdir(subdir_path)
-            if os.path.isfile(os.path.join(subdir_path, f))
-        ]
+        # Check if the subdirectory is in the mapping
+        if subdirectory in folder_to_key_mapping:
+            # Get the corresponding key for the folder
+            key = folder_to_key_mapping[subdirectory]
 
-        if not file_names:
-            print(f"No files found in {subdirectory}")
-            continue
+            # Get all file names in the subdirectory
+            file_names = [
+                f
+                for f in os.listdir(subdir_path)
+                if os.path.isfile(os.path.join(subdir_path, f))
+            ]
 
-        # Extract the first part of the name before "-"
-        first_part = file_names[0].split("-")[0]
+            if not file_names:
+                print(f"No files found in {subdirectory}")
+                continue
 
-        # Add parentheses to the first part of the name
-        new_first_part = f"({first_part})"
+            # Rename all files in the subdirectory using the key
+            for file_name in file_names:
+                original_path = os.path.join(subdir_path, file_name)
+                new_name = file_name.replace(file_name.split("-")[0], f"({key})", 1)
+                new_path = os.path.join(subdir_path, new_name)
 
-        # Rename all files in the subdirectory
-        for file_name in file_names:
-            original_path = os.path.join(subdir_path, file_name)
-            new_name = file_name.replace(file_name.split("-")[0], new_first_part, 1)
-            new_path = os.path.join(subdir_path, new_name)
-
-            os.rename(original_path, new_path)
-            print(f"Renamed: {file_name} to {new_name}")
+                os.rename(original_path, new_path)
+                print(f"Renamed: {file_name} to {new_name}")
 
 
 if __name__ == "__main__":
