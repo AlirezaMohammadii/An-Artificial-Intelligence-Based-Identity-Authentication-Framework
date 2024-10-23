@@ -32,7 +32,7 @@ pd.set_option("max_colwidth", 100)
 
 
 def ensure_subdirectories_exist(wav_dir):
-    wave_dir = os.path.join(wav_dir, "npy")
+    wave_dir = os.path.join(wav_dir, "npy_test")
 
     if not os.path.exists(wave_dir):
         os.makedirs(wave_dir)
@@ -189,6 +189,6 @@ if __name__ == "__main__":
     ensure_subdirectories_exist("../data/sample_dataset/5Attack/")
     preprocess_and_save(
         wav_dir="../data/sample_dataset/5Attack/wav/",
-        out_dir="../data/sample_dataset/5Attack/npy/",
+        out_dir="../data/sample_dataset/5Attack/npy_test/",
     )
     print("Total computation time: {:.2f} seconds".format(tm.time() - start_time_main))
