@@ -1,6 +1,6 @@
-
 import os
 import json
+import time
 import numpy as np
 import librosa
 from collections import defaultdict
@@ -17,10 +17,9 @@ PARAMS = {
     "BEEP_FREQS": [8000, 10000],  # Example target frequencies in Hz for beeps
     "BEEP_TOLERANCE": 50,       # Frequency tolerance in Hz
     "BEEP_THRESHOLD_FACTOR": 5,  # Threshold factor for beep detection
-    # Removed beep count weight
-    "WEIGHT_AVG_PITCH": 0.4,  # Increased to account for beep count removal
-    "WEIGHT_HF_ENERGY": 0.35,  # Increased to account for beep count removal
-    "WEIGHT_PITCH_VAR_TO_AVG_RATIO": 0.15,  # Increased to balance sensitivity
+    "WEIGHT_AVG_PITCH": 0.4,  # Adjusted weights
+    "WEIGHT_HF_ENERGY": 0.35,
+    "WEIGHT_PITCH_VAR_TO_AVG_RATIO": 0.15,
     "WEIGHT_HF_VAR_TO_AVG_RATIO": 0.1,
     "TRIGGERED_THRESHOLD": 100,
     "CONFIDENCE_THRESHOLD": 0.3,
@@ -28,7 +27,18 @@ PARAMS = {
     "VISUALIZATION_OUTPUT_PATH": "visualizations"
 }
 
-
+# ================================================
+# Time Logging Utility
+# ================================================
+def log_time(message, start_time, log_file_path):
+    """
+    Log the time duration for a specific process in a user-friendly manner.
+    """
+    elapsed_time = time.time() - start_time
+    formatted_message = f"{message}: {elapsed_time:.2f} seconds\n"
+    print(formatted_message)
+    with open(log_file_path, "a") as log_file:
+        log_file.write(formatted_message)
 
 # ================================================
 # Check Existing Results (New)
@@ -244,16 +254,28 @@ def save_results_incrementally(result, results_file_path):
         json.dump(data, f, indent=4)  # Write updated results
         f.truncate()  # Remove any leftover content
 
-
 # ================================================
 # Main Execution (Enhanced Logging)
 # ================================================
 if __name__ == "__main__":
     base_path = "C:/Users/s222343272/Downloads/datasets/test_test/"
     results_file_path = PARAMS["RESULTS_FILE"]
+    output_path = "./output"
+    os.makedirs(output_path, exist_ok=True)
+    log_file_path = os.path.join(output_path, "execution_time_log.txt")
+
+    # Initialize the log file
+    with open(log_file_path, "w") as log_file:
+        log_file.write("Execution Timing Log\n")
+        log_file.write("====================\n")
+
+    # Start tracking total execution time
+    total_start_time = time.time()
 
     # Load existing results
+    start_time = time.time()
     existing_results = load_existing_results(results_file_path)
+    log_time("Loaded existing results", start_time, log_file_path)
 
     # List all subdirectories
     all_subdirectories = [
@@ -271,6 +293,7 @@ if __name__ == "__main__":
     all_results = []
 
     for batch_num in range(total_batches):
+        batch_start_time = time.time()
         print(f"===================================== Processing Batch {batch_num + 1}/{total_batches} =====================================")
         batch_subdirectories = all_subdirectories[batch_num * batch_size : (batch_num + 1) * batch_size]
         batch_results = []
@@ -278,6 +301,7 @@ if __name__ == "__main__":
 
         for subdirectory_path in batch_subdirectories:
             subdirectory_name = os.path.basename(subdirectory_path)
+            sub_start_time = time.time()
 
             # Check if subdirectory has already been analyzed
             if subdirectory_exists_in_results(subdirectory_name, existing_results):
@@ -293,6 +317,12 @@ if __name__ == "__main__":
                 print(f"  ✅ Processed '{subdirectory_name}' (Decision: {result['decision']}, Confidence: {result['confidence']:.2f}).")
             except Exception as e:
                 print(f"  ❌ Error processing '{subdirectory_name}': {str(e)}")
+
+            # Log the time taken for this subdirectory
+            log_time(f"Time taken to process subdirectory '{subdirectory_name}'", sub_start_time, log_file_path)
+
+        # Log the time taken for the entire batch
+        log_time(f"Time taken to process Batch {batch_num + 1}", batch_start_time, log_file_path)
 
         print(f"\n--- Batch {batch_num + 1}/{total_batches} Summary ---")
         print(f"  📂 Subdirectories processed: {processed_count}/{len(batch_subdirectories)}")
@@ -310,19 +340,20 @@ if __name__ == "__main__":
     print("\n===================== FINAL REPORT =====================")
     generate_batch_report(all_results, "Final")
 
+    # Log the total execution time
+    log_time("Total execution time", total_start_time, log_file_path)
+
     # Generate visualizations for all subdirectories
     visualize_results(existing_results, PARAMS["VISUALIZATION_OUTPUT_PATH"])
     print(f"📊 Final visualizations saved to: {PARAMS['VISUALIZATION_OUTPUT_PATH']}")
 
     # Generate final reports
-    json_file = PARAMS["RESULTS_FILE"]
-    output_path = "./output"
-    os.makedirs(output_path, exist_ok=True)
+    start_time = time.time()
+    metrics = process_results(results_file_path, output_path)
+    log_time("Generated final reports and metrics", start_time, log_file_path)
 
-    metrics = process_results(json_file, output_path)
-    print(f"📄 Final reports and metrics saved to: {output_path}")
+    print(f"\n✅ Processing complete. Thank you!")
 
-    print("\n✅ Processing complete. Thank you!")
 
 # # ================================================
 # # New logic for triggered/normal categorization based on beep count
