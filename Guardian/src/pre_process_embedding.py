@@ -626,7 +626,7 @@ if __name__ == "__main__":
     out_dir = "../data/sample_dataset/npy_test_1/embedding/"
 
     # embedding_type 1, 2_same, 2_different, 2_random, deterministic
-    embedding_type = "2_different"
+    embedding_type = "deterministic"
 
     GPU_or_not = False
 
