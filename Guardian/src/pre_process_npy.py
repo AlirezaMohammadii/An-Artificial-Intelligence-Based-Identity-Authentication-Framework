@@ -161,7 +161,7 @@ def preprocess_and_save(wav_dir, out_dir):
         "extract fbank from audio and save as npy, using multiprocessing pool........ "
     )
 
-    process = subprocess.check_output(["nproc"])
+    process = os.cpu_count()
     num_of_processors = int(process)
     p = Pool(num_of_processors)
     patch = int(len(libri) / num_of_processors)
@@ -186,9 +186,9 @@ def preprocess_and_save(wav_dir, out_dir):
 if __name__ == "__main__":
 
     start_time_main = tm.time()
-    ensure_subdirectories_exist("../data/sample_dataset/5Attack/")
+    ensure_subdirectories_exist("C:/Users/s222343272/Downloads/datasets/test_small/")
     preprocess_and_save(
-        wav_dir="../data/sample_dataset/5Attack/wav/",
-        out_dir="../data/sample_dataset/5Attack/npy/",
+        wav_dir="C:/Users/s222343272/Downloads/datasets/test_small/",
+        out_dir="C:/Users/s222343272/Downloads/datasets/test_small/npy/",
     )
     print("Total computation time: {:.2f} seconds".format(tm.time() - start_time_main))

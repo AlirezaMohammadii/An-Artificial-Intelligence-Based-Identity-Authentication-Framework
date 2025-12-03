@@ -92,7 +92,7 @@
 # import pandas as pd
 # from sklearn.model_selection import train_test_split
 # from sklearn.neighbors import KNeighborsClassifier
-from sklearn.metrics import confusion_matrix, classification_report
+# from sklearn.metrics import confusion_matrix, classification_report
 
 # from imblearn.over_sampling import SMOTE  # Import SMOTE
 
@@ -231,56 +231,130 @@ from sklearn.metrics import confusion_matrix, classification_report
 # plt.title("Confusion Matrix")
 # plt.show()
 
+# import pandas as pd
+# from sklearn.model_selection import train_test_split, StratifiedKFold
+# from sklearn.linear_model import LogisticRegression
+# from sklearn.metrics import classification_report
+# from imblearn.over_sampling import SMOTE
+# from imblearn.pipeline import Pipeline
+# import numpy as np
+
+# # Load the dataset
+# df = pd.read_csv("../data/guardian/knn_model/knn_training_7117532915-300-4.csv")
+
+# # Feature Engineering: Create binary indicators
+# for col in df.columns[1:]:  # Skipping the label column
+#     df[f"{col}_gt_0.6"] = (df[col] > 0.5).astype(int)
+
+# # Prepare the data
+# X = df.drop("type", axis=1)  # Features
+# y = df["type"].map({"attack": 1, "normal": 0})  # Mapping labels to binary
+
+# # Handling Imbalance with SMOTE
+# smote = SMOTE()
+
+# # Logistic Regression Model
+# logistic_regression = LogisticRegression()
+
+# # K-fold Cross-Validation setup
+# kfold = StratifiedKFold(n_splits=5)
+
+# # Pipeline: SMOTE + Logistic Regression
+# pipeline = Pipeline([("SMOTE", smote), ("Logistic Regression", logistic_regression)])
+
+# # Cross-validation and model training
+# for train_index, test_index in kfold.split(X, y):
+#     X_train, X_test = X.iloc[train_index], X.iloc[test_index]
+#     y_train, y_test = y[train_index], y[test_index]
+#     pipeline.fit(X_train, y_train)
+#     predictions = pipeline.predict(X_test)
+#     print(classification_report(y_test, predictions))
+
+# # Evaluation on new dataset
+# new_df = pd.read_csv("../data/guardian/knn_model/test_1conv_7117532915-300-4.csv")
+# # Apply the same feature engineering to the new dataset
+# for col in new_df.columns[1:]:
+#     new_df[f"{col}_gt_0.6"] = (new_df[col] > 0.6).astype(int)
+
+# new_X = new_df.drop("type", axis=1)
+# new_y = new_df["type"].map({"attack": 1, "normal": 0})
+# new_predictions = pipeline.predict(new_X)
+# print("Final Evaluation on New Dataset")
+# print("Classification Report:")
+# print(classification_report(new_y, new_predictions))
+# print("Confusion Matrix:")
+# print(confusion_matrix(new_y, new_predictions))
+
+
+import pyLDAvis
+import pyLDAvis.sklearn
 import pandas as pd
-from sklearn.model_selection import train_test_split, StratifiedKFold
-from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import classification_report
-from imblearn.over_sampling import SMOTE
-from imblearn.pipeline import Pipeline
-import numpy as np
+from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.decomposition import LatentDirichletAllocation
+import matplotlib.pyplot as plt
 
-# Load the dataset
-df = pd.read_csv("../data/guardian/knn_model/knn_training_7117532915-300-4.csv")
+def lda_topic_modeling_visualization(corpus, n_topics=5, max_features=1000):
+    """
+    Perform LDA topic modeling and visualize the results interactively using pyLDAvis.
 
-# Feature Engineering: Create binary indicators
-for col in df.columns[1:]:  # Skipping the label column
-    df[f"{col}_gt_0.6"] = (df[col] > 0.5).astype(int)
+    Parameters:
+        corpus (list of str): The textual data as a list of documents.
+        n_topics (int): Number of topics to extract using LDA.
+        max_features (int): Maximum number of features for the CountVectorizer.
 
-# Prepare the data
-X = df.drop("type", axis=1)  # Features
-y = df["type"].map({"attack": 1, "normal": 0})  # Mapping labels to binary
+    Returns:
+        None
+    """
+    # Log the start of document-term matrix creation
+    print("Step 1: Creating document-term matrix")
 
-# Handling Imbalance with SMOTE
-smote = SMOTE()
+    # Convert the textual corpus into a document-term matrix
+    vectorizer = CountVectorizer(max_features=max_features, stop_words='english')
+    dtm = vectorizer.fit_transform(corpus)  # Sparse matrix representation of term frequencies
+    print("Document-term matrix shape:", dtm.shape)  # Log the dimensions of the matrix
 
-# Logistic Regression Model
-logistic_regression = LogisticRegression()
+    # Log the start of LDA model fitting
+    print("Step 2: Fitting LDA model")
 
-# K-fold Cross-Validation setup
-kfold = StratifiedKFold(n_splits=5)
+    # Fit the Latent Dirichlet Allocation model to find topics
+    lda_model = LatentDirichletAllocation(n_components=n_topics, random_state=42)
+    lda_model.fit(dtm)  # Learn the topic distribution and word probabilities
+    print("LDA model fitted. Number of topics:", n_topics)  # Log the number of topics
 
-# Pipeline: SMOTE + Logistic Regression
-pipeline = Pipeline([("SMOTE", smote), ("Logistic Regression", logistic_regression)])
+    # Log the start of visualization preparation
+    print("Step 3: Preparing visualization")
 
-# Cross-validation and model training
-for train_index, test_index in kfold.split(X, y):
-    X_train, X_test = X.iloc[train_index], X.iloc[test_index]
-    y_train, y_test = y[train_index], y[test_index]
-    pipeline.fit(X_train, y_train)
-    predictions = pipeline.predict(X_test)
-    print(classification_report(y_test, predictions))
+    # Prepare the interactive visualization using pyLDAvis
+    lda_vis = pyLDAvis.sklearn.prepare(lda_model, dtm, vectorizer)
+    print("Visualization prepared. Launching interactive view.")
 
-# Evaluation on new dataset
-new_df = pd.read_csv("../data/guardian/knn_model/test_1conv_7117532915-300-4.csv")
-# Apply the same feature engineering to the new dataset
-for col in new_df.columns[1:]:
-    new_df[f"{col}_gt_0.6"] = (new_df[col] > 0.6).astype(int)
+    # Launch the visualization in a web browser
+    pyLDAvis.show(lda_vis)
 
-new_X = new_df.drop("type", axis=1)
-new_y = new_df["type"].map({"attack": 1, "normal": 0})
-new_predictions = pipeline.predict(new_X)
-print("Final Evaluation on New Dataset")
-print("Classification Report:")
-print(classification_report(new_y, new_predictions))
-print("Confusion Matrix:")
-print(confusion_matrix(new_y, new_predictions))
+# Example usage:
+if __name__ == "__main__":
+    import argparse
+
+    # Define command-line arguments for the script
+    parser = argparse.ArgumentParser(description="LDA Topic Modeling and Visualization")
+    parser.add_argument("input_file", type=str, help="Path to the input text file containing the corpus")
+    parser.add_argument("--topics", type=int, default=5, help="Number of topics (default: 5)")
+    parser.add_argument("--features", type=int, default=1000, help="Maximum number of features for CountVectorizer (default: 1000)")
+    args = parser.parse_args()
+
+    # Log the file loading step
+    print("Loading input file:", args.input_file)
+
+    # Read the corpus from the input file
+    with open(args.input_file, "r", encoding="utf-8") as f:
+        corpus = f.readlines()  # Read all lines from the file
+    print("Input file loaded. Number of documents:", len(corpus))  # Log the number of documents
+
+    # Log the start of the LDA process
+    print("Starting LDA topic modeling and visualization")
+
+    # Call the function to perform LDA and visualize the results
+    lda_topic_modeling_visualization(corpus, n_topics=args.topics, max_features=args.features)
+
+    # Log the completion of the LDA process
+    print("LDA topic modeling and visualization completed.")

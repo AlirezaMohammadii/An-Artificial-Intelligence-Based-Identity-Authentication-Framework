@@ -256,53 +256,215 @@ def embedding_x_for_cnn(x):
 
     return tensor
 
+def load_three_class_data(json_path, embedding_folder):
+    """
+    Parses a JSON file to build a label map for subdirectories, ignoring any
+    with 'deferred'. Loads .npy files from `embedding_folder` that match those
+    subdirectories, assigning numeric labels for the decisions:
+        normal   -> 0
+        attack   -> 1
+        triggered-> 2
+
+    :param json_path: Path to the JSON file with results (subdirectory, decision, etc.).
+    :param embedding_folder: Directory containing .npy embedding files.
+    :return: (X, Y)
+        X -> list or np.array of loaded embeddings
+        Y -> list or np.array of integer labels (0,1,2), same length as X
+    """
+
+    # 1) Read and parse the JSON file to build a label map
+    with open(json_path, "r") as f:
+        results = json.load(f)
+
+    label_map = {}  # subdirectory_name -> {0|1|2} or None if deferred
+
+    for entry in results:
+        subdir = entry["subdirectory"].strip()  # e.g. "id10074_t"
+        decision = entry["decision"].lower().strip()  # e.g. "triggered" or "deferred"
+
+        if decision == "deferred":
+            # We skip 'deferred' subdirectories
+            label_map[subdir] = None
+        elif decision == "normal":
+            label_map[subdir] = 0
+        elif decision in ("attack", "attacked"):
+            label_map[subdir] = 1
+        elif decision == "triggered":
+            label_map[subdir] = 2
+        else:
+            # If there's an unknown label, skip or handle as needed.
+            label_map[subdir] = None
+
+    # 2) Gather all .npy files in embedding_folder
+    npy_files = glob(os.path.join(embedding_folder, "*.npy"))
+
+    # 3) Build data arrays: skip any file whose subdirectory is None or missing
+    X_data = []
+    Y_data = []
+
+    for npy_path in npy_files:
+        filename = os.path.basename(npy_path)
+        # Example: if filenames look like "id10074_t-0001.npy",
+        # we split on '-' and take the first part for subdir.
+        subdir_name = filename.split("-")[0]
+
+        label = label_map.get(subdir_name, None)
+        if label is None:
+            # This covers 'deferred' or anything not in the JSON
+            continue
+
+        # 4) Load the .npy embedding
+        embedding = np.load(npy_path)
+
+        # 5) Append to X_data, Y_data
+        X_data.append(embedding)
+        Y_data.append(label)
+
+    # 6) Convert to numpy arrays (optional, but common for training)
+    X_data = np.array(X_data, dtype=object)
+    Y_data = np.array(Y_data, dtype=int)
+
+    return X_data, Y_data
+
+# def loading_embedding(embedding_folder):
+#     """
+#     Loads embeddings from .npy files, processes them for CNN input, and assigns labels:
+#         - 0 for normal files (default case),
+#         - 1 for attack files (files with '(' in their names),
+#         - 2 for triggered files (files with '[' in their names).
+    
+#     Args:
+#         embedding_folder (str): Path to the folder containing .npy embedding files.
+
+#     Returns:
+#         x (np.array): Processed embeddings for CNN input.
+#         y (np.array): Labels corresponding to the embeddings (0, 1, or 2).
+#         len(namelist): Total number of files processed.
+#     """
+#     logging.info(
+#         "Looking for fbank features [.npy] files in {}.".format(embedding_folder)
+#     )
+#     # Locate all .npy files in the folder
+#     embedding = data_catalog_onebyone(embedding_folder)
+#     if len(embedding) == 0:
+#         logging.warning(
+#             "Cannot find npy files, we will load audio, extract features and save it as npy file"
+#         )
+#         logging.warning("Waiting for preprocess...")
+#         # preprocess_and_save(c.WAV_DIR, c.DATASET_DIR)
+#         embedding = data_catalog_onebyone(embedding_folder)
+#         if len(embedding) == 0:
+#             logging.warning(
+#                 "Have you converted flac files to wav? If not, run audio/convert_flac_2_wav.sh"
+#             )
+#             exit(1)
+
+#     # X Y
+#     x_all = []
+#     namelist = embedding["filename"]
+
+#     for i in range(len(namelist)):
+#         if i % 5000 == 0:
+#             print(i)
+
+#         # Load the first file and process
+#         if i == 0:
+#             x = np.load(namelist[0])
+#             x = embedding_x_for_cnn(x)  # Process embedding for CNN input
+#             x_all.append(x)
+
+#             # Assign labels based on file name
+#             if "(" in namelist[0]:  # If file name contains '(' -> attack
+#                 y = [1]
+#             elif "[" in namelist[0]:  # If file name contains '[' -> triggered
+#                 y = [2]
+#             else:  # Otherwise -> normal
+#                 y = [0]
+#         else:
+#             tmp = np.load(namelist[i])
+#             tmp = embedding_x_for_cnn(tmp)
+#             x_all.append(tmp)
+
+#             # Assign labels based on file name
+#             if "(" in namelist[i]:  # If file name contains '(' -> attack
+#                 y.append(1)
+#             elif "[" in namelist[i]:  # If file name contains '[' -> triggered
+#                 y.append(2)
+#             else:  # Otherwise -> normal
+#                 y.append(0)
+
+#     # Convert lists to numpy arrays
+#     x = np.array(x_all)
+#     y = np.array(y)
+#     return x, y, len(namelist)
+
 
 def loading_embedding(embedding_folder):
-    logging.info(
-        "Looking for fbank features [.npy] files in {}.".format(embedding_folder)
-    )
+    """
+    Loads embeddings from .npy files, processes them for CNN input, and assigns labels:
+        - 0 for normal files,
+        - 1 for attack files (file name contains '('),
+        - 2 for triggered files (file name contains '[').
+
+    The final output 'x' will have shape (N, 32, 32, 1), suitable for the discriminator model.
+    The array 'y' will have shape (N,), containing the numeric labels [0,1,2].
+    Returns:
+        x (np.array): (N, 32, 32, 1) embeddings for CNN input.
+        y (np.array): (N,) labels for each file.
+        num_files (int): The total number of .npy files processed.
+    """
+    import logging
+    import os
+    import numpy as np
+    from guardian.utils_my_version import data_catalog_onebyone, embedding_x_for_cnn  # or wherever they are
+
+    logging.info("Looking for fbank features [.npy] files in {}.".format(embedding_folder))
+
+    # Locate all .npy files in the folder
     embedding = data_catalog_onebyone(embedding_folder)
     if len(embedding) == 0:
-        logging.warning(
-            "Cannot find npy files, we will load audio, extract features and save it as npy file"
-        )
-        logging.warning("Waiting for preprocess...")
-        # preprocess_and_save(c.WAV_DIR, c.DATASET_DIR)
-        embedding = data_catalog_onebyone(embedding_folder)
+        logging.warning("Cannot find npy files, we will attempt to preprocess or exit.")
+        # Potentially call any needed preprocessing here
+        # embedding = data_catalog_onebyone(embedding_folder)
         if len(embedding) == 0:
-            logging.warning(
-                "Have you converted flac files to wav? If not, run audio/convert_flac_2_wav.sh"
-            )
+            logging.warning("No .npy files found. Ensure your data is prepared.")
             exit(1)
 
-    # X Y
+    namelist = embedding["filename"].tolist()  # The list of file paths
     x_all = []
-    namelist = embedding["filename"]
-    for i in range(len(namelist)):
+    y_all = []
+
+    for i, file_path in enumerate(namelist):
+        # Periodic progress print
         if i % 5000 == 0:
-            print(i)
+            print(f"Processed {i} files...")
 
-        if i == 0:
-            x = np.load(namelist[0])
-            x = embedding_x_for_cnn(x)
-            x_all.append(x)
+        # 1) Load the .npy embedding
+        emb = np.load(file_path)
 
-            if "(" in namelist[0]:
-                y = [1]
-            else:
-                y = [0]
+        # 2) Convert embedding to CNN input shape (likely (32,32)) using your function
+        emb_processed = embedding_x_for_cnn(emb)  # e.g., returns shape (32, 32)
+        # Ensure shape is (32, 32, 1)
+        if emb_processed.ndim == 2:
+            emb_processed = np.expand_dims(emb_processed, axis=-1)  # => (32, 32, 1)
+
+        x_all.append(emb_processed)
+
+        # 3) Assign label based on filename
+        #    0 => normal, 1 => attack (if '(' in name), 2 => triggered (if '[' in name)
+        filename = os.path.basename(file_path)
+        if "(" in filename:
+            label = 1
+        elif "[" in filename:
+            label = 2
         else:
-            tmp = np.load(namelist[i])
-            tmp = embedding_x_for_cnn(tmp)
-            x_all.append(tmp)
+            label = 0
 
-            if "(" in namelist[i]:
-                y.append(1)
-            else:
-                y.append(0)
+        y_all.append(label)
 
-    x = np.array(x_all)
-    y = np.array(y)
+    x = np.array(x_all)  # shape => (N, 32, 32, 1)
+    y = np.array(y_all)  # shape => (N,)
+
     return x, y, len(namelist)
 
 
@@ -521,142 +683,148 @@ def auto_stat_test_model_test(
     # Assuming you want to return all the results
     return results
 
+"""
+The following function 'creat_data_convert_to_embedding' has been modified. 
+
+"""
+
+
 
 def creat_data_convert_to_embedding(
     type, model, test_dir, file_name, checkpoint=0, num_sample=2
 ):
+    # Extract the user number from the file name
+    user_number = file_name.split("-")[0].replace("fake_voice_", "")
+    current_file_path = os.path.join(test_dir, file_name)
 
-    # file_name id06040-id060401F3sjOJKAUY-00001.npy / 14-208-0005.npy
     if type == "random":
-        user_number = file_name.split("-")[0].replace(
-            "fake_voice_", ""
-        )  # 19 Vox id00212
-        # files belong to the same label
+        # Files belonging to the same label, including fake voices
         same_user_file_list = find_files(test_dir, pattern=user_number + "-*")
-        same_user_file_list += find_files(
-            test_dir, pattern="fake_voice_" + user_number + "-*"
-        )
+        same_user_file_list += find_files(test_dir, pattern="fake_voice_" + user_number + "-*")
+    elif type == "same":
+        # Files belonging to the same user
+        same_user_file_list = find_files(test_dir, pattern=user_number + "-*")
+        # Remove the current file to avoid pairing it with itself
+        same_user_file_list = [
+            f for f in same_user_file_list if f != current_file_path
+        ]
+    elif type == "different":
+        # All files in the directory
+        all_files = find_files(test_dir, pattern="*-*")
+        # Files belonging to other users
+        same_user_files = find_files(test_dir, pattern=user_number + "-*")
+        same_user_files_set = set(same_user_files)
+        same_user_file_list = [f for f in all_files if f not in same_user_files_set]
     else:
-        user_number = file_name.split("-")[0]  # 19
-        # files belong to the same label
-        same_user_file_list = find_files(
-            test_dir, pattern=user_number + "-*"
-        )  # ['/home/cc/data/14-208-0005.npy','...']
-        tmp_same_user_file_list = same_user_file_list[:]
-        for index in range(len(same_user_file_list)):
-            if "(" in same_user_file_list[index].split("/")[-1]:
-                if type == "different":
-                    # Vox Dataset detection
-                    # filename contain "id" id00015(id02213)-id02213FEovfendX3k-00003.npy
-                    # same_user_file_list[index] /home/.../embeddi...sers/id00015(id02213)-id02213FEovfendX3k-00003.npy
-                    if "id" in same_user_file_list[index].split("/")[-1].split("-")[0]:
-                        # Vox
-                        if (
-                            file_name.split("-")[0] + "-" + file_name.split("-")[1][0:7]
-                            in same_user_file_list[index]
-                        ):
-                            tmp_same_user_file_list.remove(same_user_file_list[index])
-                    else:
-                        # Librispeech
-                        if (
-                            file_name.split("-")[0]
-                            + "-"
-                            + file_name.split("-")[1]
-                            + "-"
-                            in same_user_file_list[index]
-                        ):
-                            tmp_same_user_file_list.remove(same_user_file_list[index])
-                elif type == "same":
-                    if "id" in same_user_file_list[index].split("/")[-1].split("-")[0]:
-                        # Vox
-                        if (
-                            file_name.split("-")[0] + "-" + file_name.split("-")[1][0:7]
-                            not in same_user_file_list[index]
-                        ):
-                            tmp_same_user_file_list.remove(same_user_file_list[index])
-                    else:
-                        # Librispeech
-                        if (
-                            file_name.split("-")[0]
-                            + "-"
-                            + file_name.split("-")[1]
-                            + "-"
-                            not in same_user_file_list[index]
-                        ):
-                            tmp_same_user_file_list.remove(same_user_file_list[index])
-        same_user_file_list = tmp_same_user_file_list
+        raise ValueError(f"Unknown type '{type}'")
 
-    # get a random embedding
+    # Check if same_user_file_list is empty
+    if not same_user_file_list:
+        print(f"No files found for type '{type}' and file '{file_name}', skipping")
+        return None  # Or handle appropriately, e.g., raise an exception
+
+    # Get the first embedding
     embedding1 = get_embedding(model, test_dir, file_name)
-    # print(file_name)
+
     if num_sample == 1:
         embedding = embedding1
     elif num_sample == 2:
-        # random_user = random.randint(0,len(same_user_file_list)-1)
-        random_user = checkpoint % (len(same_user_file_list))
-        file_name2 = same_user_file_list[random_user].split("/")[-1]
+        # Select a random file from the list
+        random_index = checkpoint % len(same_user_file_list)
+        file_name2 = os.path.basename(same_user_file_list[random_index])
         embedding2 = get_embedding(model, test_dir, file_name2)
-        # print(file_name2)
         con_embedding = (embedding1, embedding2)
         embedding = np.concatenate(con_embedding).reshape(1, 1024)
     elif num_sample == 3:
-        random_user1 = random.randint(0, len(same_user_file_list) - 1)
-        random_user2 = random.randint(0, len(same_user_file_list) - 1)
-        file_name2 = same_user_file_list[random_user1].split("/")[-1]
-        file_name3 = same_user_file_list[random_user2].split("/")[-1]
+        random_index1 = random.randint(0, len(same_user_file_list) - 1)
+        random_index2 = random.randint(0, len(same_user_file_list) - 1)
+        file_name2 = os.path.basename(same_user_file_list[random_index1])
+        file_name3 = os.path.basename(same_user_file_list[random_index2])
         embedding2 = get_embedding(model, test_dir, file_name2)
         embedding3 = get_embedding(model, test_dir, file_name3)
         con_embedding = (embedding1, embedding2, embedding3)
         embedding = np.concatenate(con_embedding).reshape(1, 1536)
+    else:
+        raise ValueError(f"Unsupported num_sample '{num_sample}'")
+
     return embedding
+
+def prep_none_random_users(checkpoint, files_in_folder, npy_dir, temp_dir, name='0'):
+    """
+    Same as before, but we now store single embeddings in 'temp_dir'
+    instead of the final 'out_dir'.
+    """
+    start_time = time()
+    model = import_model(checkpoint)
+
+    for i in range(len(files_in_folder)):
+        file_name = files_in_folder.iloc[i]['filename'].split("/")[-1]
+        target_filename = os.path.join(temp_dir, file_name)
+
+        # skip if the single embedding already exists in temp_dir
+        if os.path.exists(target_filename):
+            print(f"task:{name} Single embedding exists: {target_filename}")
+            continue
+
+        embedding = convert_embedding_to_npy(npy_dir, file_name, model=model)
+        if embedding is not None:
+            np.save(target_filename, embedding)
+            print(f"task:{name} Saved single embedding: {target_filename}")
+        else:
+            print(f"task:{name} Failed to process file: {file_name}")
+
+    print(f"task {name} completed in {time() - start_time:.2f} seconds.")
+
+def parse_subdir(filename):
+    """
+    E.g. "[7436]-97462-1234.npy" -> "[7436]"
+    or   "1054-4137-0007.npy"   -> "1054"
+    We always take only parts[0].
+    """
+    base = os.path.splitext(os.path.basename(filename))[0]
+    parts = base.split('-')
+    if len(parts) < 2:
+        return None
+    return parts[0]
+
 
 
 def get_embedding(model, test_dir, file_name):
+    """
+    Pass the data through the model to generate embeddings.
+    """
     x = create_test_data(test_dir, file_name)
-    batch_size = x.shape[0]
-    b = x[0]
-    num_frames = b.shape[0]
+    if x is None:
+        print(f"get_embedding: No data returned for the file: {file_name}.")
+        return None
 
-    # print("test_data:")
-    # print("num_frames = {}".format(num_frames))
-    # print("batch size: {}".format(batch_size))
-    # print("x.shape before reshape: {}".format(x.shape))
-    # print("x.shape after  reshape: {}".format(x.shape))
-
-    # embedding = model.predict_on_batch(x)
-    embedding = None
-
-    # print("The size of x",x.shape)
-
-    embed = model.predict_on_batch(x)
-    if embedding is None:
-        embedding = embed.copy()
-    else:
-        embedding = np.concatenate([embedding, embed], axis=0)
+    # Process the data through the model
+    embedding = model.predict(x)  # Assuming the model is loaded and supports .predict()
+    print(f"Generated embedding shape: {embedding.shape}")
 
     return embedding
 
 
 def create_test_data(test_dir, file_name):
-    libri = data_catalog_onebyone(test_dir, file_name)
-    file_name_list = list(libri["filename"].unique())
-    num_files = len(file_name_list)
+    """
+    Load the specific .npy file directly instead of using a glob pattern to avoid issues with special characters.
+    """
+    # Construct the full path of the file
+    file_path = os.path.join(test_dir, file_name)
 
-    test_batch = None
-    for ii in range(num_files):
-        file = libri[libri["filename"] == file_name_list[ii]]
-        file_df = pd.DataFrame(file[0:1])
-        if test_batch is None:
-            test_batch = file_df.copy()
-        else:
-            test_batch = pd.concat([test_batch, file_df], axis=0)
+    # Check if the file exists
+    if not os.path.exists(file_path):
+        print(f"No file found at path: {file_path}. Exiting.")
+        return None
 
-    new_x = []
-    for i in range(len(test_batch)):
-        filename = test_batch[i : i + 1]["filename"].values[0]
-        x = np.load(filename)
-        new_x.append(clipped_audio(x))
-    x = np.array(new_x)  # (batchsize, num_frames, 64, 1)
+    print(f"Loading file: {file_path}")
+
+    # Load the file and prepare the data
+    x = np.load(file_path)
+    x = clipped_audio(x)  # Apply the clipping logic if necessary
+    x = np.expand_dims(x, axis=0)  # Add a batch dimension
+
+    print(f"Data shape after processing: {x.shape}")
     return x
 
 

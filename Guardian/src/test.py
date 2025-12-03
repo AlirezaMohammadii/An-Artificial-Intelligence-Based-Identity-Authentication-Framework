@@ -59,6 +59,7 @@ def main(name_training, file_list, num_of_prediction):
     for i in range(times):
         model = convolutional_model()
         last_checkpoint = get_last_checkpoint_if_any(c.CHECKPOINT_FOLDER_ARRAY[i])
+        print(f" This is the last checkpoint you are looking after: {last_checkpoint}")
         # print(f"chechpoint_folder_array is:{c.CHECKPOINT_FOLDER_ARRAY[i]}")
         # print(f"lat checkpoint is: {last_checkpoint}")
         if last_checkpoint is not None:
@@ -179,7 +180,7 @@ if __name__ == "__main__":
 
     ###################################################### change detail here ################################################
 
-    file_list = "../data/sample_dataset/transferability-50_50/test_60/*"
+    file_list = "../data/sample_dataset/npy/*"
 
     num_of_prediction = 10  # 1, 10, 20
 

@@ -39,15 +39,15 @@ def discriminator_model(optimizer, loss, metrics, dropout_rate, l1_l2_value):
     x = layers.Dropout(dropout_rate)(x)
 
     # Convolutional Layer 2
-    # x = layers.Conv2D(
-    #     64,
-    #     kernel_size=(3, 3),
-    #     activation="relu",
-    #     kernel_regularizer=tf.keras.regularizers.l1_l2(l1=l1_l2_value, l2=l1_l2_value),
-    # )(x)
-    # x = layers.BatchNormalization()(x)
-    # x = layers.MaxPooling2D(pool_size=(2, 2))(x)
-    # x = layers.Dropout(dropout_rate)(x)
+    x = layers.Conv2D(
+        64,
+        kernel_size=(3, 3),
+        activation="relu",
+        kernel_regularizer=tf.keras.regularizers.l1_l2(l1=l1_l2_value, l2=l1_l2_value),
+    )(x)
+    x = layers.BatchNormalization()(x)
+    x = layers.MaxPooling2D(pool_size=(2, 2))(x)
+    x = layers.Dropout(dropout_rate)(x)
 
     # Dense Layer 1
     x = layers.Flatten()(x)

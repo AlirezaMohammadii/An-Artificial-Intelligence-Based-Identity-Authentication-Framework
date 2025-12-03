@@ -10,7 +10,7 @@ split_option = input(
 )
 
 # Directory paths
-source_dir = "../data/sample_dataset/5Attack/npy"
+source_dir = "../data/sample_dataset/libri_data/npy"
 train_dir = os.path.join(source_dir, "train")
 val_dir = os.path.join(source_dir, "val")  # Only used if user selects 3-way split
 test_dir = os.path.join(source_dir, "test")
