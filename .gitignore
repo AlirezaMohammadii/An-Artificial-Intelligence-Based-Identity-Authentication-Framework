@@ -1,0 +1,71 @@
+# Editor cruft
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Python bytecode & caches
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+
+# Virtual environments
+.venv/
+venv*/
+ENV/
+env/
+Guardian/src/venv_Guardian/
+Guardian/venv_3.10/
+
+# Logs & checkpoints
+*.log
+*.pth
+*.pt
+*.ckpt
+*.bin
+*.h5
+*.hdf5
+*.onnx
+*.pkl
+*.joblib
+
+# Intermediate numpy/audio artifacts
+*.npy
+*.npz
+*.mat
+*.wav
+*.mp3
+*.flac
+
+# Notebooks checkpoints
+**/.ipynb_checkpoints/
+
+# Guardian datasets & generated corpora
+Guardian/data/deep_speaker/
+Guardian/data/guardian/
+Guardian/data/sample_dataset/
+
+# Guardian generated caches/outputs
+Guardian/src/cache/
+Guardian/src/output/
+Guardian/src/visualizations/
+Guardian/src/process_logs.log
+Guardian/src/visualization_logs.log
+
+# Model exports
+Guardian/src/anomaly_autoencoder.h5
+Guardian/src/autoencoder.pth
+Guardian/src/hubert_autoencoder.pth
+Guardian/src/hubert_base_ls960.pt
+Guardian/src/hubert_base_ls960_L9_km500.bin
+Guardian/src/*.pt
+Guardian/src/*.pth
+Guardian/src/*.h5
+
+# OS files
+Desktop.ini
